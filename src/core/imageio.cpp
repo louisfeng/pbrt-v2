@@ -35,6 +35,10 @@
 #include "imageio.h"
 #include "spectrum.h"
 #include "targa.h"
+#include <string.h>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 // ImageIO Local Declarations
 static RGBSpectrum *ReadImageEXR(const string &name, int *width, int *height);
@@ -66,7 +70,9 @@ RGBSpectrum *ReadImage(const string &name, int *width, int *height) {
             !strcmp(name.c_str() + suffixOffset, ".PFM"))
             return ReadImagePFM(name, width, height);
     }
-    Error("Can't determine image file type from suffix of filename \"%s\"",
+    Error("Unable to load image stored in format \"%s\" for filename \"%s\". "
+          "Returning a constant grey image instead.",
+          strrchr(name.c_str(), '.') ? (strrchr(name.c_str(), '.') + 1) : "(unknown)",
           name.c_str());
     RGBSpectrum *ret = new RGBSpectrum[1];
     ret[0] = 0.5f;
@@ -98,6 +104,26 @@ void WriteImage(const string &name, float *pixels, float *alpha, int xRes,
             WriteImagePFM(name, pixels, xRes, yRes);
             return;
         }
+        if (!strcmp(name.c_str() + suffixOffset, ".png") ||
+            !strcmp(name.c_str() + suffixOffset, ".PNG")) {
+            uint8_t *rgb8 = new uint8_t[3 * xRes * yRes];
+            uint8_t *dst = rgb8;
+            for (int y = 0; y < yRes; ++y) {
+                for (int x = 0; x < xRes; ++x) {
+#define TO_BYTE(v) (uint8_t(Clamp(255.f * powf((v), 1.f/2.2f), 0.f, 255.f)))
+                    dst[0] = TO_BYTE(pixels[3*(y*xRes+x)+2]);
+                    dst[1] = TO_BYTE(pixels[3*(y*xRes+x)+1]);
+                    dst[2] = TO_BYTE(pixels[3*(y*xRes+x)+0]);
+#undef TO_BYTE
+                    dst += 3;
+                }
+            }
+            if (stbi_write_png(name.c_str(), xRes, yRes, 3, rgb8,
+                               3 * xRes) == 0)
+                Error("Error writing PNG \"%s\"", name.c_str());
+            delete[] rgb8;
+            return;
+        }
     }
     Error("Can't determine image file type from suffix of filename \"%s\"",
           name.c_str());
@@ -119,30 +145,19 @@ using namespace Imath;
 // EXR Function Definitions
 static RGBSpectrum *ReadImageEXR(const string &name, int *width, int *height) {
     try {
-    InputFile file(name.c_str());
-    Box2i dw = file.header().dataWindow();
-    *width  = dw.max.x - dw.min.x + 1;
+    RgbaInputFile file (name.c_str());
+    Box2i dw = file.dataWindow();
+    *width = dw.max.x - dw.min.x + 1;
     *height = dw.max.y - dw.min.y + 1;
-
-    half *rgb = new half[3 * *width * *height];
-
-    FrameBuffer frameBuffer;
-    frameBuffer.insert("R", Slice(HALF, (char *)rgb,
-        3*sizeof(half), *width * 3 * sizeof(half), 1, 1, 0.0));
-    frameBuffer.insert("G", Slice(HALF, (char *)rgb+sizeof(half),
-        3*sizeof(half), *width * 3 * sizeof(half), 1, 1, 0.0));
-    frameBuffer.insert("B", Slice(HALF, (char *)rgb+2*sizeof(half),
-        3*sizeof(half), *width * 3 * sizeof(half), 1, 1, 0.0));
-
-    file.setFrameBuffer(frameBuffer);
+    std::vector<Rgba> pixels(*width * *height);
+    file.setFrameBuffer(&pixels[0] - dw.min.x - dw.min.y * *width, 1, *width);
     file.readPixels(dw.min.y, dw.max.y);
 
     RGBSpectrum *ret = new RGBSpectrum[*width * *height];
     for (int i = 0; i < *width * *height; ++i) {
-        float frgb[3] = { rgb[3*i], rgb[3*i+1], rgb[3*i+2] };
+        float frgb[3] = { pixels[i].r, pixels[i].g, pixels[i].b };
         ret[i] = RGBSpectrum::FromRGB(frgb);
     }
-    delete[] rgb;
     Info("Read EXR image %s (%d x %d)", name.c_str(), *width, *height);
     return ret;
     } catch (const std::exception &e) {

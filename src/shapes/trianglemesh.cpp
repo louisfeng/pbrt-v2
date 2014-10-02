@@ -143,13 +143,13 @@ bool Triangle::Intersect(const Ray &ray, float *tHit, float *rayEpsilon,
     float invDivisor = 1.f / divisor;
 
     // Compute first barycentric coordinate
-    Vector d = ray.o - p1;
-    float b1 = Dot(d, s1) * invDivisor;
+    Vector s = ray.o - p1;
+    float b1 = Dot(s, s1) * invDivisor;
     if (b1 < 0. || b1 > 1.)
         return false;
 
     // Compute second barycentric coordinate
-    Vector s2 = Cross(d, e1);
+    Vector s2 = Cross(s, e1);
     float b2 = Dot(ray.d, s2) * invDivisor;
     if (b2 < 0. || b1 + b2 > 1.)
         return false;
@@ -360,7 +360,7 @@ void Triangle::GetShadingGeometry(const Transform &obj2world,
     else
         dndu = dndv = Normal(0,0,0);
     *dgShading = DifferentialGeometry(dg.p, ss, ts,
-        (*ObjectToWorld)(dndu), (*ObjectToWorld)(dndv),
+        obj2world(dndu), obj2world(dndv),
         dg.u, dg.v, dg.shape);
     dgShading->dudx = dg.dudx;  dgShading->dvdx = dg.dvdx;
     dgShading->dudy = dg.dudy;  dgShading->dvdy = dg.dvdy;

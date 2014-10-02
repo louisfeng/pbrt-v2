@@ -243,6 +243,13 @@ Transform LookAt(const Point &pos, const Point &look, const Vector &up) {
 
     // Initialize first three columns of viewing matrix
     Vector dir = Normalize(look - pos);
+    if (Cross(Normalize(up), dir).Length() == 0) {
+        Error("\"up\" vector (%f, %f, %f) and viewing direction (%f, %f, %f) "
+              "passed to LookAt are pointing in the same direction.  Using "
+              "the identity transformation.", up.x, up.y, up.z, dir.x, dir.y,
+              dir.z);
+        return Transform();
+    }
     Vector left = Normalize(Cross(Normalize(up), dir));
     Vector newUp = Cross(dir, left);
     m[0][0] = left.x;
@@ -391,7 +398,8 @@ void AnimatedTransform::Interpolate(float time, Transform *t) const {
 
 BBox AnimatedTransform::MotionBounds(const BBox &b,
                                      bool useInverse) const {
-    if (!actuallyAnimated) return Inverse(*startTransform)(b);
+    if (!actuallyAnimated) 
+      return useInverse ? Inverse(*startTransform)(b) : (*startTransform)(b);
     BBox ret;
     const int nSteps = 128;
     for (int i = 0; i < nSteps; ++i) {

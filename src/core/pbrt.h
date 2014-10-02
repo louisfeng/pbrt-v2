@@ -34,6 +34,12 @@
 #pragma once
 #endif
 
+#ifdef __GNUC__
+#if (__GNUC__ == 4) && (__GNUC_MINOR__ == 8) && (__GNUC_PATCHLEVEL__ == 2)
+#error "You're compiling with g++ version 4.8.2, which has a tragic bug in std::nth_element, which in turn causes crashes in pbrt  (http://gcc.gnu.org/bugzilla/show_bug.cgi?id=58800). Please upgrade your version of g++"
+#endif // 4.8.2 borkage
+#endif // __GNUC__
+
 #ifndef PBRT_CORE_PBRT_H
 #define PBRT_CORE_PBRT_H
 
@@ -83,14 +89,18 @@ using std::sort;
 #include <float.h>
 #define isnan _isnan
 #define isinf(f) (!_finite((f)))
-typedef __int8 int8_t;
+#if _MSC_VER >= 1600
+#include <stdint.h>
+#else
+typedef signed __int8 int8_t;
 typedef unsigned __int8 uint8_t;
-typedef __int16 int16_t;
+typedef signed __int16 int16_t;
 typedef unsigned __int16 uint16_t;
-typedef __int32 int32_t;
+typedef signed __int32 int32_t;
 typedef unsigned __int32 uint32_t;
-typedef __int64 int64_t;
+typedef signed __int64 int64_t;
 typedef unsigned __int64 uint64_t;
+#endif // _MSC_VER >= 1600
 #pragma warning (disable : 4305) // double constant assigned to float
 #pragma warning (disable : 4244) // int -> float conversion
 #pragma warning (disable : 4267) // size_t -> unsigned int conversion
@@ -261,7 +271,7 @@ inline int Log2Int(float v) {
 
 
 inline bool IsPowerOf2(int v) {
-    return (v & (v - 1)) == 0;
+    return v && !(v & (v - 1));
 }
 
 
